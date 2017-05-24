@@ -156,6 +156,9 @@ def delete_env(env_name):
     if code != 0:
         print "encountered error with deleting env"
         sys.exit(code)
+    print "deleting routes"
+    unset_routes(env_name)
+    print "deleting deployment dir"
     delete_deployment_dir(env_name)
 
 
@@ -169,6 +172,36 @@ def read_ops(env_name):
     with open(dir_name(env_name) + "/ops") as f:
         return [l.strip() for l in f.readlines()]
 
+def unset_routes(env_name):
+    if platform.system() == "Linux":
+        subprocess.call([
+            "sudo",
+            "route",
+            "del",
+            "-net",
+            "10.244.0.0/16",
+            "gw",
+            "192.168.%d.6" % class_c(env_name),
+        ])
+    elif platform.system() == "Windows":
+        subprocess.call([
+            "route",
+            "del",
+            "10.244.0.0/16",
+            "192.168.%d.6" % class_c(env_name),
+        ])
+    elif platform.system() == "Darwin":
+        subprocess.call([
+            "sudo",
+            "route",
+            "del",
+            "-net",
+            "10.244.0.0/16",
+            "192.168.%d.6" % class_c(env_name),
+        ])
+    else:
+        print "unable to detect platform"
+        sys.exit(1)
 
 def set_routes(env_name):
     if platform.system() == "Linux":
