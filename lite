@@ -8,6 +8,7 @@ import subprocess
 import platform
 import string
 import signal
+import re
 
 
 DEFAULT_OPS_FILES = [
@@ -22,9 +23,20 @@ USAGE = """\
 usage: lite create env-name
        lite delete env-name
        lite set-routes env-name
-       lite tunnel env-name deployment instance_group tunnel\
+       lite tunnel env-name deployment instance_group tunnel
+       lite ssh-command env-name deployment instance_group cmd\
 """
 BAD_ENV_NAME_CHARS = """ !@#$%^&*()_+-={}|[]\:";'<>?,/~`"""
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -279,6 +291,38 @@ def tunnel(env_name, args):
     stdout=f,
     ).wait()
 
+def ssh_command(env_name, args):
+    if len(args) != 3:
+        eprint(USAGE)
+        sys.exit(1)
+
+    deployment = args[0]
+    instance_group = args[1]
+    cmd = args[2]
+
+    p = subprocess.Popen([
+        "bosh",
+        "--environment",
+        env_name,
+        "--deployment",
+        deployment,
+        "ssh",
+        instance_group,
+        "--command",
+        cmd,
+    ],
+    stdout=subprocess.PIPE,
+    )
+    p.wait()
+
+    for line in p.stdout:
+        m = re.search('(.+)\s+(stdout|stderr)\s+\|\s+(.+)', line)
+        if m is not None and len(m.groups()) >= 3:
+            if m.groups()[1] == "stdout":
+		print("{}{}{}\n{}\n".format(bcolors.OKGREEN, m.groups()[0], bcolors.ENDC, m.groups()[2]))
+            else:
+		eprint("{}{}{}\n{}\n".format(bcolors.WARNING, m.groups()[0], bcolors.ENDC, m.groups()[2]))
+
 def main():
     action, env_name, args = parse_action()
     if action == "create":
@@ -289,6 +333,8 @@ def main():
         set_routes(env_name, args)
     elif action == "tunnel":
         tunnel(env_name, args)
+    elif action == "ssh-command":
+        ssh_command(env_name, args)
     else:
         eprint(USAGE)
         sys.exit(1)
@@ -299,7 +345,7 @@ def parse_action():
         eprint(USAGE)
         sys.exit(1)
     action, env_name = sys.argv[1], sys.argv[2]
-    if action not in ["create", "delete", "set-routes", "tunnel"]:
+    if action not in ["create", "delete", "set-routes", "tunnel", "ssh-command"]:
         eprint(USAGE)
         sys.exit(1)
     for c in BAD_ENV_NAME_CHARS:
