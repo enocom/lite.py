@@ -32,4 +32,7 @@ lite delete my-cool-env
 
 # to establish an ssh tunnel to a VM
 lite tunnel my-cool-env my-deployment my-instance-group 9999:localhost:3458
+
+# to run a ssh command across an instance_group
+lite ssh-command my-cool-env my-deployment my-instance-group 'my cool command'
 ```

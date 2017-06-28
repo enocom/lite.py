@@ -315,13 +315,32 @@ def ssh_command(env_name, args):
     )
     p.wait()
 
+    vms_out = dict()
+    vms_err = dict()
     for line in p.stdout:
         m = re.search('(.+)\s+(stdout|stderr)\s+\|\s+(.+)', line)
-        if m is not None and len(m.groups()) >= 3:
-            if m.groups()[1] == "stdout":
-		print("{}{}{}\n{}\n".format(bcolors.OKGREEN, m.groups()[0], bcolors.ENDC, m.groups()[2]))
-            else:
-		eprint("{}{}{}\n{}\n".format(bcolors.WARNING, m.groups()[0], bcolors.ENDC, m.groups()[2]))
+        if m is None or len(m.groups()) < 3:
+            continue
+
+        name = m.groups()[0]
+        outType = m.groups()[1]
+        output = m.groups()[2]
+
+        vms = vms_out if outType == "stdout" else vms_err
+
+        if name not in vms:
+            vms[name]=[]
+
+        vms[name].append(output)
+
+    def print_vms(vms, title_color, printer):
+      for name, outputs in vms.items():
+        printer("{}{}{}\n".format(title_color, name, bcolors.ENDC))
+        for output in outputs:
+          printer("{}\n".format(output))
+
+    print_vms(vms_out, bcolors.OKGREEN, print)
+    print_vms(vms_err, bcolors.FAIL, eprint)
 
 def main():
     action, env_name, args = parse_action()
