@@ -25,8 +25,13 @@ usage: lite create env-name
        lite set-routes env-name
        lite tunnel env-name deployment instance_group tunnel
        lite ssh-command env-name deployment instance_group cmd\
+
+set environment variable 'BOSH_CMD' to set bosh-cli path. Defaults to 'bosh'.
 """
 BAD_ENV_NAME_CHARS = """ !@#$%^&*()_+-={}|[]\:";'<>?,/~`"""
+
+def bosh_cmd():
+    return "/usr/local/bin/bosh" if "BOSH_CMD" not in os.environ else os.environ["BOSH_CMD"]
 
 class bcolors:
     HEADER = '\033[95m'
@@ -51,7 +56,7 @@ def create_env(env_name, args):
     create_deployment_dir(env_name)
     write_ops(env_name, DEFAULT_OPS_FILES)
     code = subprocess.call([
-        "bosh",
+        bosh_cmd(),
         "create-env",
         "~/workspace/bosh-deployment/bosh.yml",
         "--state", dir_name(env_name) + "/state.json",
@@ -68,19 +73,19 @@ def create_env(env_name, args):
         sys.exit(code)
 
     ca_cert = subprocess.check_output([
-        "bosh",
+        bosh_cmd(),
         "int",
         dir_name(env_name) + "/creds.yml",
         "--path", "/director_ssl/ca",
     ])
     password = subprocess.check_output([
-        "bosh",
+        bosh_cmd(),
         "int",
         dir_name(env_name) + "/creds.yml",
         "--path", "/admin_password",
     ])
     subprocess.call([
-        "bosh",
+        bosh_cmd(),
         "-e", "192.168.%d.6" % class_c(env_name),
         "--ca-cert", ca_cert,
         "--client", "admin",
@@ -90,14 +95,14 @@ def create_env(env_name, args):
     ], stdout=sys.stdout, stderr=sys.stderr)
     insert_secrets(env_name, "admin", password)
     subprocess.call([
-        "bosh",
+        bosh_cmd(),
         "-n",
         "-e", env_name,
         "upload-stemcell",
         "https://bosh.io/d/stemcells/bosh-warden-boshlite-ubuntu-trusty-go_agent",
     ], stdout=sys.stdout, stderr=sys.stderr)
     subprocess.call([
-        "bosh",
+        bosh_cmd(),
         "-n",
         "-e", env_name,
         "update-cloud-config",
@@ -167,7 +172,7 @@ def delete_env(env_name, args):
     ensure_env_exists(env_name)
     ops = read_ops(env_name)
     code = subprocess.call([
-        "bosh",
+        bosh_cmd(),
         "delete-env",
         "~/workspace/bosh-deployment/bosh.yml",
         "--state", dir_name(env_name) + "/state.json",
@@ -279,7 +284,7 @@ def tunnel(env_name, args):
     eprint("*******************************")
 
     p = subprocess.Popen([
-        "bosh",
+        bosh_cmd(),
         "--environment",
         env_name,
         "--deployment",
@@ -301,7 +306,7 @@ def ssh_command(env_name, args):
     cmd = args[2]
 
     p = subprocess.Popen([
-        "bosh",
+        bosh_cmd(),
         "--environment",
         env_name,
         "--deployment",
@@ -343,6 +348,12 @@ def ssh_command(env_name, args):
     print_vms(vms_err, bcolors.FAIL, eprint)
 
 def main():
+    # Validate bosh command is present and executable
+    if not os.path.isfile(bosh_cmd()) or not os.access(bosh_cmd(), os.X_OK):
+        eprint("'{}' is not a valid bosh-cli".format(bosh_cmd()))
+        eprint("please set BOSH_CMD to a valid bosh-cli path")
+        sys.exit(1)
+
     action, env_name, args = parse_action()
     if action == "create":
         create_env(env_name, args)
