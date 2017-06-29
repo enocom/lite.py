@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import sys
 import os
 import shutil
 import subprocess
 import platform
 import string
+import signal
+import re
 
 
 DEFAULT_OPS_FILES = [
@@ -19,14 +22,32 @@ DEFAULT_OPS_FILES = [
 USAGE = """\
 usage: lite create env-name
        lite delete env-name
-       lite set-routes env-name\
+       lite set-routes env-name
+       lite tunnel env-name deployment instance_group tunnel
+       lite ssh-command env-name deployment instance_group cmd\
 """
 BAD_ENV_NAME_CHARS = """ !@#$%^&*()_+-={}|[]\:";'<>?,/~`"""
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
-def create_env(env_name):
-    print "creating env:", env_name
-    print "on network: 192.168.%d.0/24" % class_c(env_name)
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+def create_env(env_name, args):
+    if len(args) != 0:
+        eprint(USAGE)
+        sys.exit(1)
+
+    eprint("creating env:", env_name)
+    eprint("on network: 192.168.%d.0/24" % class_c(env_name))
     create_deployment_dir(env_name)
     write_ops(env_name, DEFAULT_OPS_FILES)
     code = subprocess.call([
@@ -42,7 +63,7 @@ def create_env(env_name):
         "-v", "outbound_network_name=NatNetwork",
     ] + ops_args(DEFAULT_OPS_FILES), stdout=sys.stdout, stderr=sys.stderr)
     if code != 0:
-        print "encountered error with creating env"
+        eprint("encountered error with creating env")
         delete_deployment_dir(env_name)
         sys.exit(code)
 
@@ -86,7 +107,7 @@ def create_env(env_name):
 
 def create_deployment_dir(env_name):
     if env_exists(env_name):
-        print "env directory already exists:", dir_name(env_name)
+        eprint("env directory already exists:", dir_name(env_name))
         sys.exit(1)
     os.makedirs(dir_name(env_name))
 
@@ -127,7 +148,7 @@ def insert_secrets(env_name, username, password):
     search_line = "  alias: %s\n" % env_name
     pos = string.find(data, search_line)
     if pos == -1:
-        print "unable to add secrets to alias-env."
+        eprint("unable to add secrets to alias-env.")
         return
     secrets = """
   username: %s
@@ -137,8 +158,12 @@ def insert_secrets(env_name, username, password):
         f.write(data[:pos] + secrets + data[pos:])
 
 
-def delete_env(env_name):
-    print "deleting env:", env_name
+def delete_env(env_name, args):
+    if len(args) != 0:
+        eprint(USAGE)
+        sys.exit(1)
+
+    eprint("deleting env:", env_name)
     ensure_env_exists(env_name)
     ops = read_ops(env_name)
     code = subprocess.call([
@@ -154,18 +179,18 @@ def delete_env(env_name):
         "-v", "outbound_network_name=NatNetwork",
     ] + ops_args(ops), stdout=sys.stdout, stderr=sys.stderr)
     if code != 0:
-        print "encountered error with deleting env"
+        eprint("encountered error with deleting env")
         sys.exit(code)
-    print "deleting routes"
+    eprint("deleting routes")
     unset_routes(env_name)
-    print "deleting deployment dir"
+    eprint("deleting deployment dir")
     delete_deployment_dir(env_name)
     log_out(env_name)
 
 
 def ensure_env_exists(env_name):
     if not env_exists(env_name):
-        print "env does not exist"
+        eprint("env does not exist")
         sys.exit(1)
 
 
@@ -212,10 +237,14 @@ def unset_routes(env_name):
             "192.168.%d.6" % class_c(env_name),
         ])
     else:
-        print "unable to detect platform"
+        eprint("unable to detect platform")
         sys.exit(1)
 
-def set_routes(env_name):
+def set_routes(env_name, args):
+    if len(args) != 0:
+        eprint(USAGE)
+        sys.exit(1)
+
     if platform.system() == "Linux":
         subprocess.call([
             "sudo",
@@ -243,36 +272,119 @@ def set_routes(env_name):
             "192.168.%d.6" % class_c(env_name),
         ])
     else:
-        print "unable to detect platform"
+        eprint("unable to detect platform")
         sys.exit(1)
 
+def tunnel(env_name, args):
+    if len(args) != 3:
+        eprint(USAGE)
+        sys.exit(1)
+
+    deployment = args[0]
+    instance_group = args[1]
+    tunnel = args[2]
+
+    f = open(os.devnull, 'w')
+
+    eprint("*******************************")
+    eprint("****** Use ctrl-d to stop *****")
+    eprint("*******************************")
+
+    p = subprocess.Popen([
+        "bosh",
+        "--environment",
+        env_name,
+        "--deployment",
+        deployment,
+        "ssh",
+        instance_group,
+        "--opts=-L {}".format(tunnel),
+    ],
+    stdout=f,
+    ).wait()
+
+def ssh_command(env_name, args):
+    if len(args) != 3:
+        eprint(USAGE)
+        sys.exit(1)
+
+    deployment = args[0]
+    instance_group = args[1]
+    cmd = args[2]
+
+    p = subprocess.Popen([
+        "bosh",
+        "--environment",
+        env_name,
+        "--deployment",
+        deployment,
+        "ssh",
+        instance_group,
+        "--command",
+        cmd,
+    ],
+    stdout=subprocess.PIPE,
+    )
+    p.wait()
+
+    vms_out = dict()
+    vms_err = dict()
+    for line in p.stdout:
+        m = re.search('(.+)\s+(stdout|stderr)\s+\|\s+(.+)', line)
+        if m is None or len(m.groups()) < 3:
+            continue
+
+        name = m.groups()[0]
+        outType = m.groups()[1]
+        output = m.groups()[2]
+
+        vms = vms_out if outType == "stdout" else vms_err
+
+        if name not in vms:
+            vms[name]=[]
+
+        vms[name].append(output)
+
+    def print_vms(vms, title_color, printer):
+      for name, outputs in vms.items():
+        printer("{}{}{}\n".format(title_color, name, bcolors.ENDC))
+        for output in outputs:
+          printer("{}\n".format(output))
+
+    print_vms(vms_out, bcolors.OKGREEN, print)
+    print_vms(vms_err, bcolors.FAIL, eprint)
 
 def main():
-    action, env_name = parse_args()
+    action, env_name, args = parse_action()
     if action == "create":
-        create_env(env_name)
+        create_env(env_name, args)
     elif action == "delete":
-        delete_env(env_name)
+        delete_env(env_name, args)
     elif action == "set-routes":
-        set_routes(env_name)
+        set_routes(env_name, args)
+    elif action == "tunnel":
+        tunnel(env_name, args)
+    elif action == "ssh-command":
+        ssh_command(env_name, args)
     else:
-        print USAGE
+        eprint(USAGE)
         sys.exit(1)
 
 
-def parse_args():
-    if len(sys.argv) != 3:
-        print USAGE
+def parse_action():
+    if len(sys.argv) < 3:
+        eprint(USAGE)
         sys.exit(1)
     action, env_name = sys.argv[1], sys.argv[2]
-    if action not in ["create", "delete", "set-routes"]:
-        print USAGE
+    if action not in ["create", "delete", "set-routes", "tunnel", "ssh-command"]:
+        eprint(USAGE)
         sys.exit(1)
     for c in BAD_ENV_NAME_CHARS:
         if c in env_name:
-            print "invalid character name in env name:", c
+            eprint("invalid character name in env name:", c)
             sys.exit(1)
-    return action, env_name
+
+    return action, env_name, sys.argv[3:]
 
 
 if __name__ == "__main__":
