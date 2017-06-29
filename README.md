@@ -29,4 +29,7 @@ lite set-routes my-cool-env
 
 # to delete an env
 lite delete my-cool-env
+
+# to establish an ssh tunnel to a VM
+lite tunnel my-cool-env my-deployment my-instance-group 9999:localhost:3458
 ```
