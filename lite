@@ -25,8 +25,8 @@ BAD_ENV_NAME_CHARS = """ !@#$%^&*()_+-={}|[]\:";'<>?,/~`"""
 
 
 def create_env(env_name):
-    print "creating env:", env_name
-    print "on network: 192.168.%d.0/24" % class_c(env_name)
+    print("creating env:", env_name)
+    print("on network: 192.168.%d.0/24" % class_c(env_name))
     create_deployment_dir(env_name)
     write_ops(env_name, DEFAULT_OPS_FILES)
     code = subprocess.call([
@@ -42,7 +42,7 @@ def create_env(env_name):
         "-v", "outbound_network_name=NatNetwork",
     ] + ops_args(DEFAULT_OPS_FILES), stdout=sys.stdout, stderr=sys.stderr)
     if code != 0:
-        print "encountered error with creating env"
+        print("encountered error with creating env")
         delete_deployment_dir(env_name)
         sys.exit(code)
 
@@ -86,7 +86,7 @@ def create_env(env_name):
 
 def create_deployment_dir(env_name):
     if env_exists(env_name):
-        print "env directory already exists:", dir_name(env_name)
+        print("env directory already exists:", dir_name(env_name))
         sys.exit(1)
     os.makedirs(dir_name(env_name))
 
@@ -127,7 +127,7 @@ def insert_secrets(env_name, username, password):
     search_line = "  alias: %s\n" % env_name
     pos = string.find(data, search_line)
     if pos == -1:
-        print "unable to add secrets to alias-env."
+        print("unable to add secrets to alias-env.")
         return
     secrets = """
   username: %s
@@ -138,7 +138,7 @@ def insert_secrets(env_name, username, password):
 
 
 def delete_env(env_name):
-    print "deleting env:", env_name
+    print("deleting env:", env_name)
     ensure_env_exists(env_name)
     ops = read_ops(env_name)
     code = subprocess.call([
@@ -154,18 +154,18 @@ def delete_env(env_name):
         "-v", "outbound_network_name=NatNetwork",
     ] + ops_args(ops), stdout=sys.stdout, stderr=sys.stderr)
     if code != 0:
-        print "encountered error with deleting env"
+        print("encountered error with deleting env")
         sys.exit(code)
-    print "deleting routes"
+    print("deleting routes")
     unset_routes(env_name)
-    print "deleting deployment dir"
+    print("deleting deployment dir")
     delete_deployment_dir(env_name)
     log_out(env_name)
 
 
 def ensure_env_exists(env_name):
     if not env_exists(env_name):
-        print "env does not exist"
+        print("env does not exist")
         sys.exit(1)
 
 
@@ -212,7 +212,7 @@ def unset_routes(env_name):
             "192.168.%d.6" % class_c(env_name),
         ])
     else:
-        print "unable to detect platform"
+        print("unable to detect platform")
         sys.exit(1)
 
 def set_routes(env_name):
@@ -243,7 +243,7 @@ def set_routes(env_name):
             "192.168.%d.6" % class_c(env_name),
         ])
     else:
-        print "unable to detect platform"
+        print("unable to detect platform")
         sys.exit(1)
 
 
@@ -256,21 +256,21 @@ def main():
     elif action == "set-routes":
         set_routes(env_name)
     else:
-        print USAGE
+        print(USAGE)
         sys.exit(1)
 
 
 def parse_args():
     if len(sys.argv) != 3:
-        print USAGE
+        print(USAGE)
         sys.exit(1)
     action, env_name = sys.argv[1], sys.argv[2]
     if action not in ["create", "delete", "set-routes"]:
-        print USAGE
+        print(USAGE)
         sys.exit(1)
     for c in BAD_ENV_NAME_CHARS:
         if c in env_name:
-            print "invalid character name in env name:", c
+            print("invalid character name in env name:", c)
             sys.exit(1)
     return action, env_name
 
