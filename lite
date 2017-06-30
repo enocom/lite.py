@@ -204,14 +204,14 @@ def read_ops(env_name):
         return [l.strip() for l in f.readlines()]
 
 def log_out(env_name):
-    print "logging out"
+    eprint("logging out")
     code = subprocess.call([
         "bosh",
         "--environment", env_name,
         "log-out"],
         stdout=sys.stdout, stderr=sys.stderr)
     if code != 0:
-        print "encountered error with logging out"
+        eprint("encountered error with logging out")
         sys.exit(code)
 
 def unset_routes(env_name):
