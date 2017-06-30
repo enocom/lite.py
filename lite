@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
 import sys
 import os
 import shutil
@@ -190,6 +189,7 @@ def delete_env(env_name, args):
     unset_routes(env_name)
     eprint("deleting deployment dir")
     delete_deployment_dir(env_name)
+    log_out(env_name)
 
 
 def ensure_env_exists(env_name):
@@ -201,6 +201,17 @@ def ensure_env_exists(env_name):
 def read_ops(env_name):
     with open(dir_name(env_name) + "/ops") as f:
         return [l.strip() for l in f.readlines()]
+
+def log_out(env_name):
+    eprint("logging out")
+    code = subprocess.call([
+        "bosh",
+        "--environment", env_name,
+        "log-out"],
+        stdout=sys.stdout, stderr=sys.stderr)
+    if code != 0:
+        eprint("encountered error with logging out")
+        sys.exit(code)
 
 def unset_routes(env_name):
     if platform.system() == "Linux":
