@@ -187,7 +187,7 @@ def delete_env(env_name, args):
         eprint("encountered error with deleting env")
         sys.exit(code)
     eprint("deleting routes")
-    unset_routes(env_name)
+    unset_routes()
     eprint("deleting deployment dir")
     delete_deployment_dir(env_name)
     log_out(env_name)
@@ -214,7 +214,7 @@ def log_out(env_name):
         eprint("encountered error with logging out")
         sys.exit(code)
 
-def unset_routes(env_name):
+def unset_routes():
     if platform.system() == "Linux":
         subprocess.call([
             "sudo",
@@ -223,23 +223,20 @@ def unset_routes(env_name):
             "-net",
             "10.244.0.0/16",
             "gw",
-            "192.168.%d.6" % class_c(env_name),
         ])
     elif platform.system() == "Windows":
         subprocess.call([
             "route",
             "del",
             "10.244.0.0/16",
-            "192.168.%d.6" % class_c(env_name),
         ])
     elif platform.system() == "Darwin":
         subprocess.call([
             "sudo",
             "route",
-            "del",
+            "delete",
             "-net",
             "10.244.0.0/16",
-            "192.168.%d.6" % class_c(env_name),
         ])
     else:
         eprint("unable to detect platform")
@@ -250,6 +247,7 @@ def set_routes(env_name, args):
         eprint(USAGE)
         sys.exit(1)
 
+    unset_routes()
     if platform.system() == "Linux":
         subprocess.call([
             "sudo",
