@@ -18,6 +18,8 @@ DEFAULT_OPS_FILES = [
     "bosh-lite.yml",
     "bosh-lite-runc.yml",
     "jumpbox-user.yml",
+    "uaa.yml",
+    "credhub.yml",
 ]
 USAGE = """\
 usage: lite create env-name
